@@ -223,6 +223,16 @@ See [tools Orchestrate/README.md](tools%20Orchestrate/README.md) for detailed in
 
 ---
 
+## ⚠️ Known Pitfalls
+
+- **`callbackUrl` header is case-sensitive** - Use exactly `callbackUrl`, not `callbackurl` or `callback_url`
+- **No `data:` prefix in Base64** - Send raw Base64 string without `data:image/...;base64,` prefix
+- **Use `--host 0.0.0.0`** - Required for Lima VM access, `127.0.0.1` won't work
+- **Source `.env` before running** - Run `set -a && source .env && set +a` or server will fail
+- **COS buckets must exist** - Create input/output buckets in IBM Cloud before testing batch
+
+---
+
 ## 🧰 Available Tools
 
 ### 1️⃣ Single Image (Base64 Output)
