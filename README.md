@@ -98,7 +98,44 @@ curl http://localhost:8000/health
 
 ## 🧪 Quick Test
 
-### Prerequisites for Batch Processing
+### Option 1: Automated Test Script (Recommended)
+
+The easiest way to verify your setup:
+
+```bash
+# 1. Make the script executable
+chmod +x scripts/test_local.sh
+
+# 2. Load environment variables
+set -a
+source .env
+set +a
+
+# 3. Start FastAPI (in a separate terminal)
+uvicorn main:app --host 0.0.0.0 --port 8000
+
+# 4. Run the test script
+./scripts/test_local.sh
+```
+
+**What it does:**
+- ✅ Verifies all required environment variables
+- ✅ Checks FastAPI server health
+- ✅ Validates COS configuration
+- ✅ Starts a local callback server automatically
+- ✅ Tests single image processing (Base64)
+- ✅ Tests batch image processing
+- ✅ Cleans up resources on exit
+
+**Prerequisites:**
+- Test image `burger.jpeg` in project root (for single image test)
+- Input bucket with test images (for batch test)
+
+---
+
+### Option 2: Manual Testing
+
+#### Prerequisites for Batch Processing
 
 Before testing batch operations, ensure:
 
@@ -111,7 +148,7 @@ curl http://localhost:8000/cos/config
 # Verify: endpoint, input_bucket, output_bucket match your setup
 ```
 
-### 1. Start a Callback Server
+#### 1. Start a Callback Server
 
 In a new terminal:
 ```bash
@@ -132,7 +169,7 @@ uvicorn.run(app, host="127.0.0.1", port=9999)
 PY
 ```
 
-### 2. Process an Image
+#### 2. Process an Image
 
 ```bash
 export B64=$(base64 -i your-image.jpg | tr -d '\n')
