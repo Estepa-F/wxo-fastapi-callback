@@ -442,7 +442,7 @@ This allows the VM to communicate with the FastAPI server running on the Mac hos
 ✅ **Keep callback responses fast** (< 5 seconds)
 ✅ **Include job_id** in all responses for correlation
 ✅ **Test with local callback server** before deploying to WXO
-✅ **Handle retries gracefully** (callbacks may be sent multiple times)
+✅ **Handle retries gracefully** (WXO may retry callbacks; server sends once only)
 
 ---
 
