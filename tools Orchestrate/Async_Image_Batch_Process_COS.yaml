@@ -1,0 +1,141 @@
+openapi: 3.0.3
+info:
+  title: Batch Image Processing Tool (Async + Callback)
+  version: "1.1.0"
+
+servers:
+  # Doit être joignable depuis WXO (dans ta Lima VM: host.lima.internal fonctionne)
+  - url: http://host.lima.internal:8000
+
+paths:
+  /batch-process-images:
+    post:
+      operationId: batchProcessImages
+      summary: Batch process all images from COS input bucket and store results in COS output bucket
+      description: >
+        Launches an asynchronous batch job that lists all images in a COS input bucket/prefix,
+        applies the same prompt-based transformation to each image, uploads results to a COS
+        output bucket/prefix, and finally POSTs a single completion payload to the provided
+        callbackUrl header.
+      parameters:
+        - in: header
+          name: callbackUrl
+          description: Callback URL provided by watsonx Orchestrate (required for async tools)
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchProcessRequest"
+      responses:
+        "202":
+          description: Accepted (job started asynchronously)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+
+      callbacks:
+        callback:
+          "{$request.header.callbackUrl}":
+            post:
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: "#/components/schemas/BatchCallbackPayload"
+              responses:
+                "200":
+                  description: OK
+
+components:
+  schemas:
+    BatchProcessRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+          description: Instruction applied to all input images (natural language)
+
+    AcceptedResponse:
+      type: object
+      required: [accepted, job_id]
+      properties:
+        accepted:
+          type: boolean
+          description: Always true when the job is accepted
+        job_id:
+          type: string
+          description: Server-generated job identifier (UUID)
+
+    BatchCallbackPayload:
+      type: object
+      required:
+        - status
+        - job_id
+        - total_files
+        - total_files_processed
+        - processed
+        - failed
+        - duration_seconds
+        - output_bucket
+        - output_prefix
+        - errors
+      properties:
+        status:
+          type: string
+          description: Final status of the batch job
+          enum: [completed, completed_with_errors, failed]
+
+        job_id:
+          type: string
+          description: Job identifier returned in the initial 202 response
+
+        total_files:
+          type: integer
+          description: Total number of input images discovered
+
+        total_files_processed:
+          type: integer
+          description: Total number of images actually processed (including fallback local)
+
+        processed:
+          type: integer
+          description: Number of images successfully processed and uploaded
+
+        failed:
+          type: integer
+          description: Number of images that failed processing and/or upload
+
+        fallback_local:
+          type: integer
+          description: Number of images processed using local fallback (optional)
+          nullable: true
+
+        duration_seconds:
+          type: number
+          description: Total batch duration in seconds
+
+        output_bucket:
+          type: string
+          description: COS bucket where results were stored
+
+        output_prefix:
+          type: string
+          description: COS prefix where results were stored for this job
+
+        errors:
+          type: array
+          description: List of error messages (may include informational notes like fallback usage)
+          items:
+            type: string
+
+        error:
+          type: string
+          description: Top-level fatal error message (only when status=failed)
+          nullable: true
