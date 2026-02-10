@@ -182,6 +182,7 @@ Callback URL (WXO)
 - Python 3.9+
 - IBM Cloud Object Storage account
 - OpenAI API key
+- **For local development on Mac**: Lima VM with watsonX Orchestrate ADK
 
 ### Installation Steps
 
@@ -213,6 +214,8 @@ cp .env.example .env
 uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
 ```
 
+> ⚠️ **Important**: Use `--host 0.0.0.0` (not `127.0.0.1`) to make the server accessible from Lima VM.
+
 6. **Health check:**
 ```bash
 curl http://127.0.0.1:8000/health
@@ -221,6 +224,170 @@ curl http://127.0.0.1:8000/health
 Expected response:
 ```json
 {"ok": true}
+```
+
+---
+
+## 🖥️ Local Development with watsonX Orchestrate (Mac + Lima VM)
+
+### Architecture Overview
+
+When developing locally on Mac with watsonX Orchestrate ADK installed via Lima VM:
+
+```
+Mac (Host)
+├── FastAPI Server (port 8000)
+│   └── http://0.0.0.0:8000
+│
+└── Lima VM (ibm-watsonx-orchestrate)
+    ├── watsonX Orchestrate ADK (port 4321)
+    │   └── Accessible via SSH tunnel: localhost:14321
+    │
+    └── Access to Mac host via: host.lima.internal:8000
+```
+
+### Why `host.lima.internal:8000`?
+
+Lima VM runs in an isolated virtual network. To allow watsonX Orchestrate (inside the VM) to communicate with the FastAPI server (on the Mac host), Lima provides a special DNS alias **`host.lima.internal`** that resolves to the Mac host's IP address from within the VM.
+
+This is why all YAML tool definitions use:
+```yaml
+servers:
+  - url: http://host.lima.internal:8000
+```
+
+### Step-by-Step Local Setup
+
+#### 1. Start FastAPI Server on Mac
+
+```bash
+cd wxo-fastapi-callback
+source .venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
+```
+
+**Expected output:**
+```
+INFO:     Started server process [34585]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+```
+
+> 💡 **Critical**: Must use `--host 0.0.0.0` to be accessible from Lima VM!
+
+#### 2. Start watsonX Orchestrate ADK (Lima VM)
+
+```bash
+# Start Lima VM if not already running
+limactl start ibm-watsonx-orchestrate
+
+# Launch Orchestrate ADK inside the VM
+# (Follow your ADK installation instructions)
+```
+
+#### 3. Create SSH Tunnel to Access Orchestrate UI
+
+From your Mac terminal, create an SSH tunnel to forward Orchestrate's port 4321 to your local port 14321:
+
+```bash
+ssh -o 'IdentityFile="/Users/francoisestepa/.lima/_config/user"' \
+  -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile=/dev/null \
+  -o NoHostAuthenticationForLocalhost=yes \
+  -o PreferredAuthentications=publickey \
+  -o Compression=no \
+  -o BatchMode=yes \
+  -o IdentitiesOnly=yes \
+  -o GSSAPIAuthentication=no \
+  -o 'Ciphers="^aes128-gcm@openssh.com,aes256-gcm@openssh.com"' \
+  -o User=francoisestepa \
+  -o ControlMaster=auto \
+  -o 'ControlPath="/Users/francoisestepa/.lima/ibm-watsonx-orchestrate/ssh.sock"' \
+  -o ControlPersist=yes \
+  -o Hostname=127.0.0.1 \
+  -o Port=55782 \
+  -N \
+  -L 14321:127.0.0.1:4321 \
+  lima-ibm-watsonx-orchestrate
+```
+
+> 📝 **Note**: Adjust the following parameters for your setup:
+> - `User=francoisestepa` → Your Mac username
+> - `Port=55782` → Your Lima VM SSH port (check with `limactl list`)
+> - `14321` → Local port on Mac (can be changed if already in use)
+
+#### 4. Access watsonX Orchestrate
+
+Open your browser and navigate to:
+```
+http://localhost:14321
+```
+
+#### 5. Import Tools into Orchestrate
+
+1. Navigate to the tools section in Orchestrate UI
+2. Import the YAML files from `tools Orchestrate/` as API tools:
+   - `Async_Image_Processing_B64.yaml`
+   - `Async_Image_Processing_COS.yaml`
+   - `Async_Image_Batch_Process_COS.yaml`
+3. Import the Python tool:
+   - `bytes_to_base64_min.py`
+4. Import the workflows:
+   - `Modify_one_image_and_get_result.json`
+   - `Modify_one_image_and_save_result_COS.json`
+   - `Modify_images_in_folder.json`
+
+#### 6. Test the Connection
+
+Verify that the Lima VM can reach your FastAPI server:
+
+```bash
+# Enter the Lima VM shell
+limactl shell ibm-watsonx-orchestrate
+
+# Test connectivity from inside the VM
+curl http://host.lima.internal:8000/health
+```
+
+**Expected response:**
+```json
+{"ok": true}
+```
+
+If successful, your workflows can now call the FastAPI server via `http://host.lima.internal:8000`!
+
+### Troubleshooting Local Development
+
+| Problem | Solution |
+|---------|----------|
+| `Connection refused` on `host.lima.internal:8000` | Ensure FastAPI is running with `--host 0.0.0.0` (not `127.0.0.1`) |
+| SSH tunnel disconnects | Re-run the SSH tunnel command |
+| Port 14321 already in use | Change local port in SSH command: `-L 14322:127.0.0.1:4321` |
+| Lima VM won't start | `limactl stop ibm-watsonx-orchestrate && limactl start ibm-watsonx-orchestrate` |
+| Can't access Orchestrate UI | Verify tunnel is running: `ps aux \| grep "14321:127.0.0.1:4321"` |
+| Tools can't reach FastAPI | Check firewall settings on Mac, ensure port 8000 is not blocked |
+
+### Quick Start Commands
+
+```bash
+# Terminal 1: Start FastAPI
+cd wxo-fastapi-callback
+source .venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
+
+# Terminal 2: Start SSH tunnel
+ssh -o 'IdentityFile="/Users/YOUR_USERNAME/.lima/_config/user"' \
+  -o StrictHostKeyChecking=no \
+  -o Hostname=127.0.0.1 \
+  -o Port=YOUR_LIMA_PORT \
+  -N \
+  -L 14321:127.0.0.1:4321 \
+  lima-ibm-watsonx-orchestrate
+
+# Terminal 3: Test connectivity
+limactl shell ibm-watsonx-orchestrate
+curl http://host.lima.internal:8000/health
 ```
 
 ---
