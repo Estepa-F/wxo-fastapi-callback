@@ -8,6 +8,13 @@
 > **📚 Related Documentation:**
 > [API.md](API.md) · [CONFIGURATION.md](CONFIGURATION.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [tools Orchestrate/README.md](tools%20Orchestrate/README.md)
 
+> **🧭 Where to start?**
+> - Want to run it locally? → You're in the right place (README.md)
+> - Want to configure it? → [CONFIGURATION.md](CONFIGURATION.md)
+> - Want to integrate via API? → [API.md](API.md)
+> - Want to understand design choices? → [ARCHITECTURE.md](ARCHITECTURE.md)
+> - Want to use it in WXO? → [tools Orchestrate/README.md](tools%20Orchestrate/README.md)
+
 ---
 
 ## 📌 Overview
