@@ -85,8 +85,10 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
 ```
 
 > ⚠️ **Important**: Use `--host 0.0.0.0` (not `127.0.0.1`) to make the server accessible from Lima VM.
+>
+> **Troubleshooting**: If `curl http://host.lima.internal:8000/health` fails from inside the VM, it's almost always because FastAPI was started with `127.0.0.1` instead of `0.0.0.0`.
 
-4. **Verify it's running:**
+5. **Verify it's running:**
 ```bash
 curl http://localhost:8000/health
 # Expected: {"ok": true}
