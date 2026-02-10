@@ -60,7 +60,26 @@ cp .env.example .env
 # Edit .env with your credentials (see CONFIGURATION.md for details)
 ```
 
-3. **Run the server:**
+3. **Load environment variables:**
+
+> ⚠️ **CRITICAL**: You MUST load `.env` before running the server!
+
+```bash
+set -a
+source .env
+set +a
+```
+
+**Verify variables are loaded:**
+```bash
+echo $COS_ENDPOINT
+# Should print: https://s3.eu-de.cloud-object-storage.appdomain.cloud
+
+echo $OPENAI_API_KEY | wc -c
+# Should print a number > 10 (without exposing the key)
+```
+
+4. **Run the server:**
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
 ```
