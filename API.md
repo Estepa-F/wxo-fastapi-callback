@@ -4,10 +4,29 @@ Complete API reference for the WXO Asynchronous Image Processing service.
 
 ---
 
-## Base URL
+## Base URLs
 
+**Local Development:**
 ```
 http://localhost:8000
+```
+
+**Lima VM (from watsonX Orchestrate):**
+```
+http://host.lima.internal:8000
+```
+
+> See [README.md](README.md#local-development-with-watsonx-orchestrate-mac--lima-vm) for Lima VM setup details.
+
+---
+
+## Configuration
+
+All configuration is managed via environment variables. See [CONFIGURATION.md](CONFIGURATION.md) for complete setup guide.
+
+**Quick validation:**
+```bash
+curl http://localhost:8000/cos/config
 ```
 
 ---
@@ -15,65 +34,6 @@ http://localhost:8000
 ## Authentication
 
 Currently, no authentication is required. For production deployments, implement appropriate authentication mechanisms (API keys, OAuth, etc.).
-
----
-
-## Environment Variables
-
-Complete list of environment variables required for the service:
-
-### IBM Cloud Object Storage
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `COS_ENDPOINT` | Yes | - | COS endpoint URL (region-specific)<br>Example: `https://s3.eu-de.cloud-object-storage.appdomain.cloud` |
-| `COS_REGION` | Yes | - | COS region code<br>Example: `eu-de`, `us-south`, `us-east` |
-| `COS_BUCKET` | No | - | Default bucket (legacy, used as fallback) |
-| `COS_ACCESS_KEY_ID` | Yes | - | HMAC access key ID from IBM Cloud credentials |
-| `COS_SECRET_ACCESS_KEY` | Yes | - | HMAC secret access key from IBM Cloud credentials |
-| `COS_PRESIGN_EXPIRES` | No | `900` | Presigned URL expiration time in seconds (15 minutes default) |
-
-### Batch Processing Configuration
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `COS_INPUT_BUCKET` | Yes | - | Bucket containing source images for batch processing |
-| `COS_OUTPUT_BUCKET` | Yes | - | Bucket where processed images will be stored |
-| `COS_INPUT_PREFIX` | No | `""` | Folder path in input bucket (e.g., `demo/` or `images/raw/`) |
-| `COS_OUTPUT_PREFIX` | No | `results/batch` | Base folder path in output bucket<br>Results stored as: `{OUTPUT_PREFIX}/{job_id}/` |
-
-### OpenAI Configuration
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `OPENAI_API_KEY` | Yes | - | OpenAI API key from https://platform.openai.com/api-keys |
-| `OPENAI_IMAGE_MODEL` | No | `gpt-image-1` | Image model to use (check OpenAI docs for latest models) |
-| `OPENAI_IMAGE_QUALITY` | No | `high` | Image quality: `low`, `medium`, `high`, or `auto` |
-| `OPENAI_IMAGE_OUTPUT_FORMAT` | No | `png` | Output format: `png`, `jpeg`, or `webp` |
-
-### Example .env File
-
-```bash
-# IBM Cloud Object Storage
-COS_ENDPOINT=https://s3.eu-de.cloud-object-storage.appdomain.cloud
-COS_REGION=eu-de
-COS_BUCKET=wxo-images
-COS_ACCESS_KEY_ID=your_access_key_id_here
-COS_SECRET_ACCESS_KEY=your_secret_access_key_here
-COS_PRESIGN_EXPIRES=900
-
-# Batch Processing
-COS_INPUT_BUCKET=input-images
-COS_OUTPUT_BUCKET=wxo-images
-COS_INPUT_PREFIX=
-COS_OUTPUT_PREFIX=results/batch
-
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_IMAGE_MODEL=gpt-image-1
-OPENAI_IMAGE_QUALITY=high
-OPENAI_IMAGE_OUTPUT_FORMAT=png
-```
 
 ---
 
@@ -523,37 +483,7 @@ Currently, no rate limiting is implemented. For production:
 
 ---
 
-## Best Practices
-
-### 1. Callback URL
-- Use HTTPS in production
-- Implement idempotency (same job_id may be retried)
-- Return `200 OK` quickly to acknowledge receipt
-- Process callback data asynchronously if needed
-
-### 2. Image Base64 Encoding
-```bash
-# Correct encoding (no data: prefix)
-base64 -i image.jpg | tr -d '\n'
-
-# Incorrect (includes data: prefix)
-# Don't use: data:image/jpeg;base64,iVBORw0...
-```
-
-### 3. Batch Processing
-- Start with small batches to test
-- Monitor duration and adjust batch size
-- Check `errors` array for partial failures
-- Use `fallback_local` count to track OpenAI availability
-
-### 4. Presigned URLs
-- URLs expire after `COS_PRESIGN_EXPIRES` seconds (default: 900)
-- Download or process results before expiration
-- Store object_key for regenerating URLs if needed
-
----
-
-## Testing with cURL
+## cURL Examples
 
 ### Single Image (Base64)
 ```bash
@@ -577,50 +507,56 @@ curl -X POST http://localhost:8000/batch-process-images \
   -d '{"prompt": "enhance colors and brightness"}'
 ```
 
+
 ---
 
-## Webhook/Callback Server Example
+## Best Practices
 
-Simple FastAPI callback server for testing:
+### Callback URLs
+- Use HTTPS in production
+- Implement idempotency (same job_id may be retried)
+- Return `200 OK` quickly (< 5 seconds)
+- Process callback data asynchronously if needed
 
-```python
-from fastapi import FastAPI
-import uvicorn
-from datetime import datetime, timezone
+### Image Encoding
+```bash
+# Correct: base64 without data: prefix
+base64 -i image.jpg | tr -d '\n'
 
-app = FastAPI()
-
-@app.post("/callback")
-def receive_callback(data: dict):
-    print(f"\n=== Callback received at {datetime.now(timezone.utc).isoformat()} ===")
-    print(f"Status: {data.get('status')}")
-    print(f"Job ID: {data.get('job_id')}")
-    
-    if data.get('status') == 'completed':
-        if 'result_image_base64' in data:
-            print(f"Result: Base64 image ({len(data['result_image_base64'])} chars)")
-        elif 'result_url' in data:
-            print(f"Result URL: {data['result_url']}")
-        elif 'total_files' in data:
-            print(f"Batch: {data['processed']}/{data['total_files']} processed")
-    
-    return {"ok": True}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=9999)
+# Incorrect: includes data: prefix
+# data:image/jpeg;base64,iVBORw0...
 ```
 
+### Batch Processing
+- Start with small batches to test
+- Monitor `duration_seconds` to optimize batch size
+- Check `errors` array for partial failures
+- Track `fallback_local` count for OpenAI availability
+
+### Presigned URLs
+- URLs expire after configured time (default: 900 seconds)
+- Download results before expiration
+- Store `object_key` to regenerate URLs if needed
+
 ---
 
-## OpenAPI/Swagger Documentation
+## Interactive Documentation
 
-Interactive API documentation is available at:
-
+**Swagger UI:**
 ```
 http://localhost:8000/docs
 ```
 
-Alternative ReDoc documentation:
-
+**ReDoc:**
 ```
 http://localhost:8000/redoc
+```
+
+---
+
+## Related Documentation
+
+- [README.md](README.md) - Quick start and setup
+- [CONFIGURATION.md](CONFIGURATION.md) - Environment variables
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Technical architecture
+- [tools Orchestrate/README.md](tools%20Orchestrate/README.md) - watsonX Orchestrate integration

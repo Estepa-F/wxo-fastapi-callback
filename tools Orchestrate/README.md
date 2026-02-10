@@ -1,295 +1,271 @@
-# Tools Orchestrate - Documentation
+# Tools Orchestrate - watsonX Orchestrate Integration Guide
 
-Ce dossier contient les outils et workflows pour IBM watsonX Orchestrate permettant le traitement d'images via IA avec différents modes de fonctionnement.
-
-## 📋 Vue d'ensemble
-
-Les outils proposés permettent de :
-- Traiter des images individuellement ou en masse
-- Utiliser différents formats de sortie (Base64 ou Cloud Object Storage)
-- Exécuter des traitements asynchrones avec callbacks
-- Appliquer des transformations IA basées sur des prompts en langage naturel
+Mode d'emploi pour importer et utiliser les outils d'image processing dans IBM watsonX Orchestrate.
 
 ---
 
-## 🔧 Outils API (YAML)
+## 📋 Vue d'ensemble
+
+Ce dossier contient tous les fichiers nécessaires pour intégrer le service de traitement d'images dans watsonX Orchestrate :
+
+- **3 API Tools (YAML)** - Endpoints asynchrones pour le traitement d'images
+- **1 Python Tool** - Utilitaires de conversion Base64
+- **3 Workflows (JSON)** - Flows prêts à l'emploi pour différents cas d'usage
+
+---
+
+## 🔧 API Tools (YAML)
 
 ### 1. `Async_Image_Processing_B64.yaml`
 
-**Type** : API Tool (OpenAPI 3.0)  
-**Endpoint** : `/process-image-async-b64`  
-**Mode** : Asynchrone avec callback
+**Endpoint:** `/process-image-async-b64`  
+**Opération:** `processImageAsyncToBase64`
 
-**Description** :  
-Traite une seule image de manière asynchrone et retourne le résultat encodé en Base64 via un callback.
+**Ce qu'il fait:**  
+Traite une image et retourne le résultat encodé en Base64 directement dans le callback.
 
-**Paramètres d'entrée** :
-- `prompt` (string, requis) : Instruction en langage naturel pour la transformation
-- `image_base64` (string, requis) : Image source encodée en Base64
-- `filename` (string, optionnel) : Nom du fichier original
-- `callbackUrl` (header, requis) : URL de callback fournie par watsonX Orchestrate
+**Inputs:**
+- `prompt` (string, requis) - Instruction en langage naturel
+- `image_base64` (string, requis) - Image source en Base64
+- `filename` (string, optionnel) - Nom du fichier original
 
-**Réponse immédiate (202)** :
-```json
-{
-  "accepted": true,
-  "job_id": "uuid-du-job"
-}
-```
+**Outputs (callback):**
+- `status` - `completed` ou `failed`
+- `job_id` - Identifiant unique du job
+- `result_image_base64` - Image modifiée en Base64
+- `result_mime_type` - Type MIME du résultat
 
-**Callback (POST vers callbackUrl)** :
-```json
-{
-  "status": "completed",
-  "job_id": "uuid-du-job",
-  "filename": "image.jpg",
-  "result_image_base64": "base64-encoded-result"
-}
-```
-
-**Cas d'usage** :  
-Idéal pour traiter une image et récupérer directement le résultat dans le workflow sans passer par un stockage externe.
+**Cas d'usage:** Affichage direct dans le chat, prévisualisation rapide
 
 ---
 
 ### 2. `Async_Image_Processing_COS.yaml`
 
-**Type** : API Tool (OpenAPI 3.0)  
-**Endpoint** : `/process-image-async`  
-**Mode** : Asynchrone avec callback
+**Endpoint:** `/process-image-async`  
+**Opération:** `processImageAsyncToCos`
 
-**Description** :  
-Traite une seule image de manière asynchrone et stocke le résultat dans IBM Cloud Object Storage (COS). Retourne une URL pré-signée temporaire.
+**Ce qu'il fait:**  
+Traite une image et stocke le résultat dans IBM Cloud Object Storage, retourne une URL pré-signée.
 
-**Paramètres d'entrée** :
-- `prompt` (string, requis) : Instruction en langage naturel
-- `image_base64` (string, requis) : Image source en Base64
-- `filename` (string, optionnel) : Nom du fichier
-- `callbackUrl` (header, requis) : URL de callback
+**Inputs:**
+- `prompt` (string, requis) - Instruction en langage naturel
+- `image_base64` (string, requis) - Image source en Base64
+- `filename` (string, optionnel) - Nom du fichier original
 
-**Réponse immédiate (202)** :
-```json
-{
-  "accepted": true,
-  "job_id": "uuid-du-job"
-}
-```
+**Outputs (callback):**
+- `status` - `completed` ou `failed`
+- `job_id` - Identifiant unique du job
+- `result_url` - URL pré-signée vers l'image dans COS
+- `expires_in` - Durée de validité de l'URL (secondes)
 
-**Callback (POST vers callbackUrl)** :
-```json
-{
-  "status": "completed",
-  "job_id": "uuid-du-job",
-  "filename": "image.jpg",
-  "result_url": "https://cos-url/result.jpg",
-  "expires_in": 3600
-}
-```
-
-**Cas d'usage** :  
-Préférable pour les images volumineuses ou lorsque vous souhaitez conserver les résultats dans un stockage cloud avec accès via URL.
+**Cas d'usage:** Stockage persistant, partage d'URL, intégration avec d'autres systèmes
 
 ---
 
 ### 3. `Async_Image_Batch_Process_COS.yaml`
 
-**Type** : API Tool (OpenAPI 3.0)  
-**Endpoint** : `/batch-process-images`  
-**Mode** : Asynchrone avec callback
+**Endpoint:** `/batch-process-images`  
+**Opération:** `batchProcessImages`
 
-**Description** :  
-Traite en masse toutes les images d'un bucket/préfixe COS et stocke les résultats dans un autre bucket/préfixe. Applique la même transformation à toutes les images.
+**Ce qu'il fait:**  
+Traite toutes les images d'un bucket COS avec la même instruction, stocke les résultats dans un autre bucket.
 
-**Paramètres d'entrée** :
-- `prompt` (string, requis) : Instruction appliquée à toutes les images
-- `callbackUrl` (header, requis) : URL de callback
+**Inputs:**
+- `prompt` (string, requis) - Instruction appliquée à toutes les images
 
-**Configuration COS** :  
-Les buckets d'entrée/sortie sont configurés dans les variables d'environnement du serveur FastAPI.
+**Outputs (callback):**
+- `status` - `completed`, `completed_with_errors`, ou `failed`
+- `job_id` - Identifiant unique du job
+- `total_files` - Nombre total d'images trouvées
+- `processed` - Nombre d'images traitées avec succès via OpenAI
+- `fallback_local` - Nombre d'images traitées en fallback local
+- `failed` - Nombre d'images en échec
+- `duration_seconds` - Durée totale du traitement
+- `output_bucket` - Bucket COS de destination
+- `output_prefix` - Préfixe/dossier des résultats
+- `errors` - Liste des erreurs rencontrées
 
-**Réponse immédiate (202)** :
-```json
-{
-  "accepted": true,
-  "job_id": "uuid-du-job"
-}
+**Cas d'usage:** Traitement en masse de catalogues, mise à jour de bibliothèques d'images
+
+---
+
+## 🐍 Python Tool
+
+### `bytes_to_base64_min.py`
+
+**Contient 2 outils:**
+
+#### 1. `bytes_to_base64_minVersion`
+- **Input:** `data` (bytes) - Données binaires
+- **Output:** string - Chaîne Base64 encodée
+- **Usage:** Convertir un fichier uploadé en Base64 avant envoi à l'API
+
+#### 2. `base64_to_bytes_minVersion`
+- **Input:** `data` (string) - Chaîne Base64 (sans préfixe `data:`)
+- **Output:** bytes - Données binaires décodées
+- **Usage:** Reconvertir un résultat Base64 en fichier téléchargeable
+
+---
+
+## 📊 Workflows (JSON)
+
+### 1. `Modify_one_image_and_get_result.json`
+
+**Nom d'affichage:** "Modify one image and get result"
+
+**Ce qu'il fait:**  
+Workflow interactif complet : upload image → traitement → affichage du résultat dans le chat
+
+**Étapes:**
+1. Formulaire utilisateur (upload image + prompt)
+2. Conversion bytes → Base64
+3. Extraction métadonnées
+4. Appel API de traitement (Base64)
+5. Récupération résultat
+6. Conversion Base64 → bytes
+7. Affichage image modifiée
+
+**Output:** `image_output` (file) - Image modifiée téléchargeable
+
+---
+
+### 2. `Modify_one_image_and_save_result_COS.json`
+
+**Nom d'affichage:** "Modify one image and save result"
+
+**Ce qu'il fait:**  
+Similaire au précédent, mais stocke le résultat dans COS et retourne une URL.
+
+**Étapes:**
+1. Formulaire utilisateur (upload image + prompt)
+2. Conversion bytes → Base64
+3. Extraction métadonnées
+4. Appel API de traitement (COS)
+5. Récupération URL
+6. Affichage URL
+
+**Output:** `URL_image` (string) - URL pré-signée vers l'image dans COS
+
+---
+
+### 3. `Modify_images_in_folder.json`
+
+**Nom d'affichage:** "Modify images in folder and get result in another"
+
+**Ce qu'il fait:**  
+Traitement batch : applique une instruction à toutes les images d'un dossier COS.
+
+**Input:** `Instructions` (string) - Prompt appliqué à toutes les images
+
+**Outputs:**
+- `status` - Statut final du batch
+- `total_files_processed` - Nombre d'images traitées
+- `duration` - Durée totale
+- `output_bucket` - Bucket de destination
+- `error` - Message d'erreur si échec
+
+---
+
+## 🚀 Import dans watsonX Orchestrate
+
+### Prérequis
+
+1. **Serveur FastAPI** accessible depuis WXO
+   - Local: `http://host.lima.internal:8000` (voir [README.md](../README.md))
+   - Production: URL publique avec HTTPS
+
+2. **Variables d'environnement** configurées sur le serveur (voir [CONFIGURATION.md](../CONFIGURATION.md))
+
+### Étapes d'import
+
+#### 1. Importer les API Tools
+
+1. Dans WXO, aller dans **Tools** → **Add Tool** → **OpenAPI**
+2. Pour chaque fichier YAML :
+   - Upload le fichier
+   - Vérifier que l'URL du serveur est correcte (`http://host.lima.internal:8000` pour local)
+   - Sauvegarder
+
+#### 2. Importer le Python Tool
+
+1. Dans WXO, aller dans **Tools** → **Add Tool** → **Python**
+2. Upload `bytes_to_base64_min.py`
+3. Les 2 fonctions seront automatiquement détectées
+4. Sauvegarder
+
+#### 3. Importer les Workflows
+
+1. Dans WXO, aller dans **Flows** → **Import**
+2. Pour chaque fichier JSON :
+   - Upload le fichier
+   - Vérifier les mappings de tools
+   - Tester le workflow
+   - Publier
+
+---
+
+## ⚙️ Configuration WXO
+
+### Headers Requis
+
+**IMPORTANT:** Le header `callbackUrl` est **case-sensitive**. Utilisez exactement :
+```
+callbackUrl: <url-fournie-par-wxo>
 ```
 
-**Callback (POST vers callbackUrl)** :
-```json
-{
-  "status": "completed",
-  "job_id": "uuid-du-job",
-  "total_files": 50,
-  "total_files_processed": 50,
-  "processed": 48,
-  "failed": 2,
-  "fallback_local": 0,
-  "duration_seconds": 245.3,
-  "output_bucket": "output-bucket",
-  "output_prefix": "results/job-uuid/",
-  "errors": ["Error processing image1.jpg: timeout"]
-}
+❌ Incorrect: `callbackurl`, `CallbackUrl`, `callback_url`  
+✅ Correct: `callbackUrl`
+
+### Callback Schema
+
+WXO attend que le payload de callback corresponde **exactement** au schéma défini dans les YAML. Toute déviation causera une erreur.
+
+### URL du Serveur
+
+**Développement local (Lima VM):**
+```yaml
+servers:
+  - url: http://host.lima.internal:8000
 ```
 
-**Cas d'usage** :  
-Parfait pour traiter automatiquement un catalogue complet d'images (ex: améliorer toutes les photos d'un menu restaurant).
-
----
-
-## 🐍 Utilitaires Python
-
-### 4. `bytes_to_base64_min.py`
-
-**Type** : Python Tools pour watsonX Orchestrate  
-**Fonctions** : 2 outils de conversion
-
-#### Tool 1 : `bytes_to_base64_minVersion`
-
-**Description** : Convertit des bytes bruts en chaîne Base64
-
-**Paramètres** :
-- `data` (bytes) : Données binaires à encoder
-
-**Retour** :
-- `string` : Chaîne Base64 encodée (ASCII)
-
-**Permission** : READ_ONLY
-
-#### Tool 2 : `base64_to_bytes_minVersion`
-
-**Description** : Convertit une chaîne Base64 en bytes bruts
-
-**Paramètres** :
-- `data` (string) : Chaîne Base64 (sans préfixe `data:`)
-
-**Retour** :
-- `bytes` : Données binaires décodées
-
-**Permission** : READ_ONLY
-
-**Cas d'usage** :  
-Ces outils sont utilisés dans les workflows pour convertir les fichiers uploadés par l'utilisateur en Base64 avant envoi à l'API, et reconvertir les résultats Base64 en fichiers téléchargeables.
-
----
-
-## 📊 Workflows watsonX Orchestrate (JSON)
-
-### 5. `Modify_one_image_and_get_result.json`
-
-**Type** : Workflow interactif  
-**Nom d'affichage** : "Modify one image and get result"
-
-**Description** :  
-Workflow complet permettant à l'utilisateur d'uploader une image, de fournir un prompt, et de recevoir directement le résultat modifié dans le chat.
-
-**Étapes du workflow** :
-1. **User Activity** : Formulaire avec 2 champs
-   - Upload d'image (JPEG, JPG, PNG, max 10MB)
-   - Champ texte pour le prompt
-2. **Convert bytes to base64** : Conversion de l'image uploadée
-3. **Get infos image** : Extraction du nom et du contenu Base64
-4. **Process image async (B64)** : Appel de l'API de traitement
-5. **Recup result** : Extraction du résultat Base64
-6. **Convert base64 to bytes** : Reconversion en fichier
-7. **Output** : Affichage de l'image modifiée
-
-**Sortie** :
-- `image_output` (file) : Image modifiée téléchargeable
-
-**Cas d'usage** :  
-Expérience utilisateur simple et rapide pour tester des modifications d'images individuelles.
-
----
-
-### 6. `Modify_one_image_and_save_result_COS.json`
-
-**Type** : Workflow interactif  
-**Nom d'affichage** : "Modify one image and save result"
-
-**Description** :  
-Similaire au workflow précédent, mais stocke le résultat dans IBM Cloud Object Storage et retourne une URL d'accès sécurisée.
-
-**Étapes du workflow** :
-1. **User Activity** : Upload image + prompt
-2. **Convert bytes to base64** : Conversion
-3. **Get infos image** : Extraction des métadonnées
-4. **Process image async (COS)** : Appel API avec stockage COS
-5. **Recup result** : Extraction de l'URL
-6. **Output** : URL du résultat
-
-**Sortie** :
-- `URL_image` (string) : URL pré-signée vers l'image stockée dans COS
-
-**Cas d'usage** :  
-Préférable pour les images volumineuses ou lorsque vous souhaitez partager l'URL du résultat avec d'autres systèmes.
-
----
-
-### 7. `Modify_images_in_folder.json`
-
-**Type** : Workflow batch  
-**Nom d'affichage** : "Modify images in folder and get result in another"
-
-**Description** :  
-Workflow de traitement en masse permettant d'appliquer une transformation IA à toutes les images d'un dossier COS.
-
-**Paramètres d'entrée** :
-- `Instructions` (string, requis) : Prompt appliqué à toutes les images
-  - Exemple par défaut : Amélioration de photos de nourriture pour Uber Eats
-
-**Étapes du workflow** :
-1. **Input** : Réception du prompt utilisateur
-2. **Batch Process Images** : Appel de l'API batch
-3. **Output** : Statistiques du traitement
-
-**Sortie** :
-- `status` (string) : Statut final (completed, completed_with_errors, failed)
-- `total_files_processed` (integer) : Nombre d'images traitées
-- `duration` (number) : Durée totale en secondes
-- `output_bucket` (string) : Bucket COS de destination
-- `error` (string) : Message d'erreur si échec
-
-**Cas d'usage** :  
-Traitement automatisé de catalogues complets (ex: améliorer 100 photos de menu restaurant en une seule opération).
-
----
-
-## 🚀 Configuration requise
-
-### Variables d'environnement (serveur FastAPI)
-
-```bash
-# IBM Cloud Object Storage
-COS_ENDPOINT=https://s3.eu-de.cloud-object-storage.appdomain.cloud
-COS_API_KEY_ID=your-api-key
-COS_INSTANCE_CRN=your-instance-crn
-COS_INPUT_BUCKET=input-bucket-name
-COS_OUTPUT_BUCKET=output-bucket-name
-
-# OpenAI (ou autre service IA)
-OPENAI_API_KEY=your-openai-key
+**Production:**
+```yaml
+servers:
+  - url: https://your-domain.com
 ```
 
-### Prérequis watsonX Orchestrate
+---
 
-- Compte IBM watsonX Orchestrate actif
-- Accès à IBM Cloud Object Storage (pour les workflows COS)
-- Serveur FastAPI déployé et accessible depuis watsonX Orchestrate
-- Tools Python déployés dans l'environnement watsonX
+## 🧪 Test des Tools
+
+### Test d'un API Tool
+
+1. Dans WXO, ouvrir le tool
+2. Cliquer sur **Test**
+3. Fournir les inputs requis
+4. Vérifier la réponse 202 Accepted
+5. Attendre le callback avec les résultats
+
+### Test d'un Workflow
+
+1. Ouvrir le workflow
+2. Cliquer sur **Run**
+3. Suivre les étapes du formulaire
+4. Vérifier les résultats
 
 ---
 
-## 📝 Exemples de prompts
+## 📝 Exemples de Prompts
 
 ### Pour une image unique
 ```
-"Améliore la luminosité et les couleurs de cette photo"
+"Améliore la luminosité et les couleurs"
 "Rends cette image plus professionnelle"
-"Ajoute un effet vintage à cette photo"
+"Ajoute un effet vintage"
+"Supprime l'arrière-plan"
 ```
 
-### Pour un batch d'images (restaurant)
+### Pour un batch (restaurant)
 ```
 "Améliore cette photo de nourriture pour qu'elle paraisse hautement appétissante, 
 fraîche et professionnelle, comme une image utilisée sur Uber Eats. 
@@ -299,45 +275,45 @@ ajoute une lumière douce et chaleureuse."
 
 ---
 
-## 🔗 Architecture
+## 🔍 Troubleshooting
 
-```
-User (watsonX Orchestrate)
-    ↓
-Workflow JSON
-    ↓
-Python Tools (conversion Base64)
-    ↓
-API YAML (FastAPI server)
-    ↓
-IA Processing (OpenAI/autre)
-    ↓
-IBM Cloud Object Storage (optionnel)
-    ↓
-Callback → watsonX Orchestrate
-    ↓
-Result to User
-```
+### Tool ne se connecte pas au serveur
 
----
+**Problème:** `Connection refused` ou timeout
 
-## 📚 Documentation complémentaire
+**Solutions:**
+- Vérifier que le serveur FastAPI tourne
+- Pour local: vérifier que `host.lima.internal:8000` est accessible depuis la VM
+- Pour production: vérifier l'URL et le certificat SSL
 
-- [API.md](../API.md) : Documentation détaillée de l'API FastAPI
-- [ARCHITECTURE.md](../ARCHITECTURE.md) : Architecture technique du système
-- [README.md](../README.md) : Guide d'installation et de démarrage
+### Callback ne fonctionne pas
 
----
+**Problème:** Le workflow reste bloqué après l'appel
 
-## 🆘 Support
+**Solutions:**
+- Vérifier que le header `callbackUrl` est bien fourni
+- Vérifier que le payload de callback correspond au schéma YAML
+- Consulter les logs du serveur FastAPI
 
-Pour toute question ou problème :
-1. Vérifiez que le serveur FastAPI est accessible
-2. Vérifiez les variables d'environnement COS
-3. Consultez les logs du serveur FastAPI
-4. Vérifiez les permissions watsonX Orchestrate
+### Erreur de conversion Base64
+
+**Problème:** `ValueError: image_base64 invalide`
+
+**Solutions:**
+- Vérifier que l'image est bien encodée en Base64
+- S'assurer qu'il n'y a pas de préfixe `data:image/...;base64,`
+- Utiliser le tool `bytes_to_base64_minVersion` dans le workflow
 
 ---
 
-**Version** : 1.0.0  
-**Dernière mise à jour** : Février 2026
+## 📚 Documentation Complémentaire
+
+- [README.md](../README.md) - Guide de démarrage rapide
+- [API.md](../API.md) - Référence API complète
+- [CONFIGURATION.md](../CONFIGURATION.md) - Variables d'environnement
+- [ARCHITECTURE.md](../ARCHITECTURE.md) - Architecture technique
+
+---
+
+**Version:** 1.0.0  
+**Dernière mise à jour:** Février 2026

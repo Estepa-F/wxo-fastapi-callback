@@ -7,454 +7,64 @@
 
 ## 📌 Overview
 
-This project implements a set of **asynchronous image processing tools** compatible with **IBM watsonx Orchestrate (WXO)**.
+Asynchronous image processing tools for **IBM watsonx Orchestrate (WXO)** with AI-powered transformations via OpenAI and persistent storage in IBM Cloud Object Storage.
 
 ### Key Features
 
 ✅ **Single image processing** with AI (OpenAI image editing)  
 ✅ **Batch image processing** from IBM Cloud Object Storage  
 ✅ **Asynchronous execution** with callback mechanism  
-✅ **Fallback local processing** when OpenAI is unavailable (e.g., billing limit)  
-✅ **Structured metrics** for observability and workflows  
+✅ **Fallback local processing** when OpenAI is unavailable  
 ✅ **Enterprise-ready** for demos, prototyping, and production workflows
 
 ---
 
-## 🧠 Architecture
-
-```
-WXO Agent / Workflow
-        |
-        |  (OpenAPI Tool – async)
-        v
-FastAPI Tool Server
-        |
-        |-- OpenAI Image API (primary)
-        |-- Local image processing (fallback)
-        |
-        v
-IBM Cloud Object Storage
-        |
-        v
-Callback URL (WXO)
-```
-
-### Key Principles
-
-- ⚡ **Non-blocking execution** – All operations are asynchronous
-- 🔄 **Single callback per job** – Clean, predictable workflow
-- 🎯 **Separation of concerns** – Modular architecture
-- 📊 **Observable & debuggable** – Comprehensive metrics and logging
-
----
-
-## 🧰 Implemented Tools
-
-### 1️⃣ Async Image Processing – Base64 Output
-
-**Endpoint:** `POST /process-image-async-b64`
-
-**Use case:** Modify a single image and return the result directly to the chat or workflow.
-
-**Flow:**
-1. User provides an image (base64) and a natural language instruction
-2. Image is processed asynchronously via OpenAI
-3. Callback returns base64-encoded image + mime type
-
-**Best for:**
-- Chat-based interactions
-- Visual preview
-- Lightweight demos
-
-**Request Example:**
-```json
-{
-  "prompt": "add a dog to the image",
-  "filename": "burger.jpeg",
-  "image_base64": "iVBORw0KGgoAAAANSUhEUgAA..."
-}
-```
-
-**Callback Response:**
-```json
-{
-  "status": "completed",
-  "job_id": "550e8400-e29b-41d4-a716-446655440000",
-  "filename": "burger.jpeg",
-  "result_image_base64": "iVBORw0KGgoAAAANSUhEUgAA...",
-  "result_mime_type": "image/png"
-}
-```
-
----
-
-### 2️⃣ Async Image Processing – COS URL Output
-
-**Endpoint:** `POST /process-image-async`
-
-**Use case:** Modify a single image and store the result in IBM Cloud Object Storage.
-
-**Flow:**
-1. User provides an image (base64) and an instruction
-2. Image is processed asynchronously
-3. Result is uploaded to COS
-4. Callback returns presigned URL + object key
-
-**Best for:**
-- Persistent storage
-- Sharing & reuse
-- Integration with downstream systems
-
-**Request Example:**
-```json
-{
-  "prompt": "make the background transparent",
-  "filename": "product.png",
-  "image_base64": "iVBORw0KGgoAAAANSUhEUgAA..."
-}
-```
-
-**Callback Response:**
-```json
-{
-  "status": "completed",
-  "job_id": "550e8400-e29b-41d4-a716-446655440000",
-  "filename": "product.png",
-  "object_key": "results/550e8400-e29b-41d4-a716-446655440000/product_modified.png",
-  "result_url": "https://s3.eu-de.cloud-object-storage.appdomain.cloud/...",
-  "expires_in": 900
-}
-```
-
----
-
-### 3️⃣ Batch Image Processing – COS → COS
-
-**Endpoint:** `POST /batch-process-images`
-
-**Use case:** Apply the same AI instruction to all images in a COS folder, without selecting files one by one.
-
-**Flow:**
-1. User provides a single instruction (prompt)
-2. Tool lists all images in input bucket/prefix
-3. Processes each image (OpenAI or fallback)
-4. Stores results in output bucket/prefix
-5. Single callback returns job metrics + processing summary
-
-**Best for:**
-- Mass content updates
-- E-commerce catalogs
-- Marketing assets
-- Migration or rebranding use cases
-
-**Request Example:**
-```json
-{
-  "prompt": "make the image more beautiful"
-}
-```
-
-**Callback Response:**
-```json
-{
-  "status": "completed",
-  "job_id": "550e8400-e29b-41d4-a716-446655440000",
-  "total_files": 3,
-  "processed": 3,
-  "failed": 0,
-  "fallback_local": 3,
-  "duration_seconds": 5.7,
-  "total_files_processed": 3,
-  "output_bucket": "wxo-images",
-  "output_prefix": "results/batch/550e8400-e29b-41d4-a716-446655440000/",
-  "errors": [
-    "Pizza.png: OpenAI billing limit -> fallback local applied"
-  ]
-}
-```
-
----
-
-## 🚀 Installation & Setup
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.9+
-- IBM Cloud Object Storage account
-- OpenAI API key
+- **Python 3.9+**
+- **IBM Cloud Object Storage** account with HMAC credentials
+- **OpenAI API key** from https://platform.openai.com/api-keys
 - **For local development on Mac**: Lima VM with watsonX Orchestrate ADK
 
-### Installation Steps
+### Installation
 
-1. **Clone the repository:**
+1. **Clone and setup:**
 ```bash
-git clone <repository-url>
+git clone https://github.com/Estepa-F/wxo-fastapi-callback.git
 cd wxo-fastapi-callback
-```
-
-2. **Create virtual environment:**
-```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
-
-3. **Install dependencies:**
-```bash
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. **Configure environment:**
+2. **Configure environment:**
 ```bash
 cp .env.example .env
-# Edit .env with your credentials
+# Edit .env with your credentials (see CONFIGURATION.md for details)
 ```
 
-5. **Run the server:**
+3. **Run the server:**
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
 ```
 
 > ⚠️ **Important**: Use `--host 0.0.0.0` (not `127.0.0.1`) to make the server accessible from Lima VM.
 
-6. **Health check:**
+4. **Verify it's running:**
 ```bash
-curl http://127.0.0.1:8000/health
-```
-
-Expected response:
-```json
-{"ok": true}
+curl http://localhost:8000/health
+# Expected: {"ok": true}
 ```
 
 ---
 
-## 🖥️ Local Development with watsonX Orchestrate (Mac + Lima VM)
+## 🧪 Quick Test
 
-### Architecture Overview
+### 1. Start a Callback Server
 
-When developing locally on Mac with watsonX Orchestrate ADK installed via Lima VM:
-
-```
-Mac (Host)
-├── FastAPI Server (port 8000)
-│   └── http://0.0.0.0:8000
-│
-└── Lima VM (ibm-watsonx-orchestrate)
-    ├── watsonX Orchestrate ADK (port 4321)
-    │   └── Accessible via SSH tunnel: localhost:14321
-    │
-    └── Access to Mac host via: host.lima.internal:8000
-```
-
-### Why `host.lima.internal:8000`?
-
-Lima VM runs in an isolated virtual network. To allow watsonX Orchestrate (inside the VM) to communicate with the FastAPI server (on the Mac host), Lima provides a special DNS alias **`host.lima.internal`** that resolves to the Mac host's IP address from within the VM.
-
-This is why all YAML tool definitions use:
-```yaml
-servers:
-  - url: http://host.lima.internal:8000
-```
-
-### Step-by-Step Local Setup
-
-#### 1. Start FastAPI Server on Mac
-
-```bash
-cd wxo-fastapi-callback
-source .venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
-```
-
-**Expected output:**
-```
-INFO:     Started server process [34585]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-```
-
-> 💡 **Critical**: Must use `--host 0.0.0.0` to be accessible from Lima VM!
-
-#### 2. Start watsonX Orchestrate ADK (Lima VM)
-
-```bash
-# Start Lima VM if not already running
-limactl start ibm-watsonx-orchestrate
-
-# Launch Orchestrate ADK inside the VM
-# (Follow your ADK installation instructions)
-```
-
-#### 3. Create SSH Tunnel to Access Orchestrate UI
-
-From your Mac terminal, create an SSH tunnel to forward Orchestrate's port 4321 to your local port 14321:
-
-```bash
-ssh -o 'IdentityFile="/Users/francoisestepa/.lima/_config/user"' \
-  -o StrictHostKeyChecking=no \
-  -o UserKnownHostsFile=/dev/null \
-  -o NoHostAuthenticationForLocalhost=yes \
-  -o PreferredAuthentications=publickey \
-  -o Compression=no \
-  -o BatchMode=yes \
-  -o IdentitiesOnly=yes \
-  -o GSSAPIAuthentication=no \
-  -o 'Ciphers="^aes128-gcm@openssh.com,aes256-gcm@openssh.com"' \
-  -o User=francoisestepa \
-  -o ControlMaster=auto \
-  -o 'ControlPath="/Users/francoisestepa/.lima/ibm-watsonx-orchestrate/ssh.sock"' \
-  -o ControlPersist=yes \
-  -o Hostname=127.0.0.1 \
-  -o Port=55782 \
-  -N \
-  -L 14321:127.0.0.1:4321 \
-  lima-ibm-watsonx-orchestrate
-```
-
-> 📝 **Note**: Adjust the following parameters for your setup:
-> - `User=francoisestepa` → Your Mac username
-> - `Port=55782` → Your Lima VM SSH port (check with `limactl list`)
-> - `14321` → Local port on Mac (can be changed if already in use)
-
-#### 4. Access watsonX Orchestrate
-
-Open your browser and navigate to:
-```
-http://localhost:14321
-```
-
-#### 5. Import Tools into Orchestrate
-
-1. Navigate to the tools section in Orchestrate UI
-2. Import the YAML files from `tools Orchestrate/` as API tools:
-   - `Async_Image_Processing_B64.yaml`
-   - `Async_Image_Processing_COS.yaml`
-   - `Async_Image_Batch_Process_COS.yaml`
-3. Import the Python tool:
-   - `bytes_to_base64_min.py`
-4. Import the workflows:
-   - `Modify_one_image_and_get_result.json`
-   - `Modify_one_image_and_save_result_COS.json`
-   - `Modify_images_in_folder.json`
-
-#### 6. Test the Connection
-
-Verify that the Lima VM can reach your FastAPI server:
-
-```bash
-# Enter the Lima VM shell
-limactl shell ibm-watsonx-orchestrate
-
-# Test connectivity from inside the VM
-curl http://host.lima.internal:8000/health
-```
-
-**Expected response:**
-```json
-{"ok": true}
-```
-
-If successful, your workflows can now call the FastAPI server via `http://host.lima.internal:8000`!
-
-### Troubleshooting Local Development
-
-| Problem | Solution |
-|---------|----------|
-| `Connection refused` on `host.lima.internal:8000` | Ensure FastAPI is running with `--host 0.0.0.0` (not `127.0.0.1`) |
-| SSH tunnel disconnects | Re-run the SSH tunnel command |
-| Port 14321 already in use | Change local port in SSH command: `-L 14322:127.0.0.1:4321` |
-| Lima VM won't start | `limactl stop ibm-watsonx-orchestrate && limactl start ibm-watsonx-orchestrate` |
-| Can't access Orchestrate UI | Verify tunnel is running: `ps aux \| grep "14321:127.0.0.1:4321"` |
-| Tools can't reach FastAPI | Check firewall settings on Mac, ensure port 8000 is not blocked |
-
-### Quick Start Commands
-
-```bash
-# Terminal 1: Start FastAPI
-cd wxo-fastapi-callback
-source .venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
-
-# Terminal 2: Start SSH tunnel
-ssh -o 'IdentityFile="/Users/YOUR_USERNAME/.lima/_config/user"' \
-  -o StrictHostKeyChecking=no \
-  -o Hostname=127.0.0.1 \
-  -o Port=YOUR_LIMA_PORT \
-  -N \
-  -L 14321:127.0.0.1:4321 \
-  lima-ibm-watsonx-orchestrate
-
-# Terminal 3: Test connectivity
-limactl shell ibm-watsonx-orchestrate
-curl http://host.lima.internal:8000/health
-```
-
----
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-Create a `.env` file based on `.env.example`:
-
-```bash
-# IBM Cloud Object Storage
-COS_ENDPOINT=https://s3.eu-de.cloud-object-storage.appdomain.cloud
-COS_REGION=eu-de
-COS_BUCKET=wxo-images
-COS_ACCESS_KEY_ID=your_access_key_here
-COS_SECRET_ACCESS_KEY=your_secret_key_here
-COS_PRESIGN_EXPIRES=900
-
-# Batch-specific
-COS_INPUT_BUCKET=input-images
-COS_OUTPUT_BUCKET=wxo-images
-COS_INPUT_PREFIX=
-COS_OUTPUT_PREFIX=results/batch
-
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_IMAGE_MODEL=gpt-image-1
-OPENAI_IMAGE_QUALITY=high
-OPENAI_IMAGE_OUTPUT_FORMAT=png
-```
-
-### Load Environment Variables
-
-```bash
-set -a
-source .env
-set +a
-```
-
----
-
-## 🧪 Testing
-
-### 1. COS Connectivity Test
-
-```bash
-curl http://127.0.0.1:8000/cos/config
-```
-
-Expected response:
-```json
-{
-  "endpoint": "https://s3.eu-de.cloud-object-storage.appdomain.cloud",
-  "region": "eu-de",
-  "input_bucket": "input-images",
-  "output_bucket": "wxo-images",
-  "input_prefix": "",
-  "output_prefix": "results/batch",
-  "presign_expires": 900
-}
-```
-
-### 2. Fake Callback Server (for local testing)
-
-Start a local callback server to receive async responses:
-
+In a new terminal:
 ```bash
 python - <<'PY'
 from fastapi import FastAPI
@@ -473,87 +83,128 @@ uvicorn.run(app, host="127.0.0.1", port=9999)
 PY
 ```
 
-### 3. Single Image Processing Test (Base64)
+### 2. Process an Image
 
 ```bash
-export B64=$(base64 -i burger.jpeg | tr -d '\n')
+export B64=$(base64 -i your-image.jpg | tr -d '\n')
 
-curl -X POST http://127.0.0.1:8000/process-image-async-b64 \
+curl -X POST http://localhost:8000/process-image-async-b64 \
   -H "Content-Type: application/json" \
-  -H "callbackUrl: http://127.0.0.1:9999/callback" \
+  -H "callbackUrl: http://localhost:9999/callback" \
   -d "{
-    \"prompt\": \"add a dog\",
-    \"filename\": \"burger.jpeg\",
+    \"prompt\": \"add a sunset background\",
+    \"filename\": \"test.jpg\",
     \"image_base64\": \"$B64\"
   }"
 ```
 
-Decode the result:
-```bash
-python - <<'PY'
-import json, base64, sys
-data = json.load(sys.stdin)
-open("/tmp/out.png","wb").write(base64.b64decode(data["result_image_base64"]))
-print("Saved /tmp/out.png")
-PY
+You should see:
+1. Immediate response: `{"accepted": true, "job_id": "..."}`
+2. Callback in terminal 1 with the processed image (base64)
+
+---
+
+## 🖥️ Local Development with watsonX Orchestrate (Mac + Lima VM)
+
+### Architecture
+
+```
+Mac (Host)
+├── FastAPI Server (port 8000)
+│   └── http://0.0.0.0:8000
+│
+└── Lima VM (ibm-watsonx-orchestrate)
+    ├── watsonX Orchestrate ADK (port 4321)
+    │   └── Accessible via SSH tunnel: localhost:14321
+    │
+    └── Access to Mac host via: host.lima.internal:8000
 ```
 
-### 4. Batch Processing Test
+### Why `host.lima.internal:8000`?
 
+Lima VM uses an isolated network. The special DNS alias **`host.lima.internal`** resolves to the Mac host's IP from within the VM, allowing Orchestrate to communicate with your FastAPI server.
+
+### Setup Steps
+
+**1. Start FastAPI on Mac:**
 ```bash
-curl -X POST http://127.0.0.1:8000/batch-process-images \
-  -H "Content-Type: application/json" \
-  -H "callbackUrl: http://127.0.0.1:9999/callback" \
-  -d '{"prompt":"make the image more beautiful"}'
+cd wxo-fastapi-callback
+source .venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
 ```
 
+**2. Start Lima VM:**
+```bash
+limactl start ibm-watsonx-orchestrate
+```
+
+**3. Create SSH Tunnel:**
+```bash
+ssh -o 'IdentityFile="/Users/YOUR_USERNAME/.lima/_config/user"' \
+  -o StrictHostKeyChecking=no \
+  -o Hostname=127.0.0.1 \
+  -o Port=YOUR_LIMA_SSH_PORT \
+  -N \
+  -L 14321:127.0.0.1:4321 \
+  lima-ibm-watsonx-orchestrate
+```
+
+> 📝 Replace `YOUR_USERNAME` and `YOUR_LIMA_SSH_PORT` (check with `limactl list`)
+
+**4. Access Orchestrate:**
+```
+http://localhost:14321
+```
+
+**5. Test Connectivity:**
+```bash
+limactl shell ibm-watsonx-orchestrate
+curl http://host.lima.internal:8000/health
+# Expected: {"ok": true}
+```
+
+**6. Import Tools:**
+
+Import these files from `tools Orchestrate/` into watsonX Orchestrate:
+- YAML files as API tools
+- Python file as Python tool  
+- JSON files as workflows
+
+See [tools Orchestrate/README.md](tools%20Orchestrate/README.md) for detailed instructions.
+
 ---
 
-## 🧠 Error Handling & Fallback Strategy
+## 🧰 Available Tools
 
-### Primary Path
-- **OpenAI Image Edit API** is used for all image processing
+### 1️⃣ Single Image (Base64 Output)
+**Endpoint:** `POST /process-image-async-b64`  
+**Use case:** Process one image, return result directly in chat/workflow  
+**Best for:** Quick demos, visual preview, lightweight interactions
 
-### Fallback Path
-- Triggered on `billing_hard_limit_reached` error
-- **Local image processing** is applied:
-  - Inverts image colors
-  - Adds red watermark text: "DEMO - FALLBACK (OpenAI billing limit)"
-- No job failure unless both OpenAI and fallback fail
+### 2️⃣ Single Image (COS URL Output)
+**Endpoint:** `POST /process-image-async`  
+**Use case:** Process one image, store in COS, return presigned URL  
+**Best for:** Persistent storage, sharing, integration with other systems
 
-### Benefits
-✅ **Reliable demos** – Always produces output  
-✅ **Cost control** – Graceful degradation on billing limits  
-✅ **Predictable workflows** – Clear error handling  
-
----
-
-## 📊 Metrics (Batch Processing)
-
-| Field | Description |
-|-------|-------------|
-| `total_files` | Images found in input bucket |
-| `processed` | Images successfully transformed via OpenAI |
-| `failed` | Images that could not be processed at all |
-| `fallback_local` | Images processed via local fallback |
-| `total_files_processed` | Sum of processed + fallback_local |
-| `duration_seconds` | Total batch duration |
-| `output_prefix` | Folder containing results |
-| `errors` | List of error messages (max 20) |
+### 3️⃣ Batch Processing (COS → COS)
+**Endpoint:** `POST /batch-process-images`  
+**Use case:** Apply same instruction to all images in a COS folder  
+**Best for:** Mass content updates, e-commerce catalogs, marketing assets
 
 ---
 
-## 🎯 Why This Matters
+## 📚 Documentation
 
-This setup demonstrates:
+| Document | Purpose |
+|----------|---------|
+| **[API.md](API.md)** | Complete API reference with endpoints, schemas, and examples |
+| **[CONFIGURATION.md](CONFIGURATION.md)** | Environment variables and setup guide |
+| **[ARCHITECTURE.md](ARCHITECTURE.md)** | Technical architecture, patterns, and design decisions |
+| **[tools Orchestrate/README.md](tools%20Orchestrate/README.md)** | watsonX Orchestrate integration guide |
 
-✅ **Agentic orchestration** – AI-driven workflows  
-✅ **Async tool patterns** – Non-blocking execution  
-✅ **Enterprise-ready AI pipelines** – Production-grade architecture  
-✅ **Resilience to external API limits** – Fallback mechanisms  
-✅ **Clean separation** between UX, AI, and storage  
+---
 
-### Use Cases
+## 🎯 Use Cases
 
 - 🎨 **Product demos** – Showcase AI capabilities
 - 🏢 **Client workshops** – Hands-on training
@@ -562,55 +213,22 @@ This setup demonstrates:
 
 ---
 
-## 📁 Project Structure
-
-```
-wxo-fastapi-callback/
-├── main.py                 # FastAPI application
-├── requirements.txt        # Python dependencies
-├── .env                    # Environment variables (not in git)
-├── .env.example           # Environment template
-├── .gitignore             # Git ignore rules
-├── README.md              # This file
-├── API.md                 # API documentation
-├── ARCHITECTURE.md        # Architecture details
-├── burger.jpeg            # Sample image
-├── test_processing.py     # Test utilities
-├── workspace_config.yaml  # Workspace configuration
-└── Main_versions/         # Version history
-    ├── main template.py
-    ├── main_envoie_cos_tunnel.py
-    ├── main_simple_B64_avec_tunnel.py
-    ├── main_simple_B64_COS_avec_tunnel.py
-    ├── main_simple_B64_COS_OpenAI_avec_tunnel.py
-    └── main_simple_B64_sans_tunnel.py
-```
-
----
-
-## 📚 Additional Documentation
-
-- [API Documentation](API.md) - Detailed API reference with all endpoints
-- [Architecture](ARCHITECTURE.md) - System design, patterns, and technical decisions
-
----
-
 ## 🔒 Security Notes
 
-- Never commit `.env` file to version control
-- Use environment variables for all sensitive credentials
+- Never commit `.env` to version control
+- Use environment variables for all credentials
 - Rotate API keys regularly
-- Use presigned URLs with appropriate expiration times
-- Implement proper authentication for production deployments
+- Use presigned URLs with appropriate expiration
+- See [CONFIGURATION.md](CONFIGURATION.md) for production security recommendations
+
+---
+
+## 🤝 Contributing
+
+This is a demo project for IBM watsonx Orchestrate. For questions or suggestions, please contact the maintainer.
 
 ---
 
 ## 📝 License
 
 This project is for demonstration and educational purposes.
-
----
-
-## 🤝 Contributing
-
-This is a demo project. For questions or suggestions, please contact the maintainer.
