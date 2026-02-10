@@ -28,7 +28,7 @@ Asynchronous image processing tools for **IBM watsonx Orchestrate (WXO)** with A
 
 ### Prerequisites
 
-- **Python 3.9+**
+- **Python 3.10+** (3.9+ supported, 3.10+ recommended)
 - **IBM Cloud Object Storage** account with HMAC credentials
 - **OpenAI API key** from https://platform.openai.com/api-keys
 - **For local development on Mac**: Lima VM with watsonX Orchestrate ADK
