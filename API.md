@@ -18,6 +18,65 @@ Currently, no authentication is required. For production deployments, implement 
 
 ---
 
+## Environment Variables
+
+Complete list of environment variables required for the service:
+
+### IBM Cloud Object Storage
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `COS_ENDPOINT` | Yes | - | COS endpoint URL (region-specific)<br>Example: `https://s3.eu-de.cloud-object-storage.appdomain.cloud` |
+| `COS_REGION` | Yes | - | COS region code<br>Example: `eu-de`, `us-south`, `us-east` |
+| `COS_BUCKET` | No | - | Default bucket (legacy, used as fallback) |
+| `COS_ACCESS_KEY_ID` | Yes | - | HMAC access key ID from IBM Cloud credentials |
+| `COS_SECRET_ACCESS_KEY` | Yes | - | HMAC secret access key from IBM Cloud credentials |
+| `COS_PRESIGN_EXPIRES` | No | `900` | Presigned URL expiration time in seconds (15 minutes default) |
+
+### Batch Processing Configuration
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `COS_INPUT_BUCKET` | Yes | - | Bucket containing source images for batch processing |
+| `COS_OUTPUT_BUCKET` | Yes | - | Bucket where processed images will be stored |
+| `COS_INPUT_PREFIX` | No | `""` | Folder path in input bucket (e.g., `demo/` or `images/raw/`) |
+| `COS_OUTPUT_PREFIX` | No | `results/batch` | Base folder path in output bucket<br>Results stored as: `{OUTPUT_PREFIX}/{job_id}/` |
+
+### OpenAI Configuration
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OPENAI_API_KEY` | Yes | - | OpenAI API key from https://platform.openai.com/api-keys |
+| `OPENAI_IMAGE_MODEL` | No | `gpt-image-1` | Image model to use (check OpenAI docs for latest models) |
+| `OPENAI_IMAGE_QUALITY` | No | `high` | Image quality: `low`, `medium`, `high`, or `auto` |
+| `OPENAI_IMAGE_OUTPUT_FORMAT` | No | `png` | Output format: `png`, `jpeg`, or `webp` |
+
+### Example .env File
+
+```bash
+# IBM Cloud Object Storage
+COS_ENDPOINT=https://s3.eu-de.cloud-object-storage.appdomain.cloud
+COS_REGION=eu-de
+COS_BUCKET=wxo-images
+COS_ACCESS_KEY_ID=your_access_key_id_here
+COS_SECRET_ACCESS_KEY=your_secret_access_key_here
+COS_PRESIGN_EXPIRES=900
+
+# Batch Processing
+COS_INPUT_BUCKET=input-images
+COS_OUTPUT_BUCKET=wxo-images
+COS_INPUT_PREFIX=
+COS_OUTPUT_PREFIX=results/batch
+
+# OpenAI
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_IMAGE_MODEL=gpt-image-1
+OPENAI_IMAGE_QUALITY=high
+OPENAI_IMAGE_OUTPUT_FORMAT=png
+```
+
+---
+
 ## Common Headers
 
 All asynchronous endpoints require a callback URL:
@@ -305,6 +364,122 @@ callbackUrl: http://your-callback-server/endpoint
 | `output_prefix` | string | Folder path containing processed images |
 | `errors` | array | List of error messages (max 20) |
 | `error` | string | Fatal error message (only present if status is `failed`) |
+
+---
+
+## Concepts and Metrics Definitions
+
+Understanding the key metrics returned by the batch processing endpoint:
+
+### Core Metrics
+
+**`total_files`**
+Total number of image files discovered in the input bucket/prefix. This represents all images found before processing begins.
+
+**`processed`**
+Number of images successfully processed using the OpenAI API. These images were transformed according to the provided prompt using OpenAI's image editing capabilities.
+
+**`fallback_local`**
+Number of images processed using the local fallback mechanism. This occurs when OpenAI is unavailable or returns a billing error. The fallback applies a simple transformation (color inversion + watermark) to ensure the workflow completes successfully.
+
+**`failed`**
+Number of images that failed both OpenAI and fallback processing. These images could not be processed at all due to errors (e.g., corrupted files, unsupported formats, upload failures).
+
+**`total_files_processed`**
+Total number of images that produced an output image. This value equals `processed + fallback_local` and represents the actual number of results available in the output bucket.
+
+### Status Values
+
+**`completed`**
+All images were processed successfully via OpenAI. No fallback was needed, and no failures occurred.
+
+**`completed_with_errors`**
+The batch job completed, but some images used fallback processing or encountered non-fatal errors. Check the `errors` array for details. All images still produced output.
+
+**`failed`**
+The batch job failed completely. This typically indicates a configuration error (missing credentials, invalid bucket names) or a critical system error. Check the `error` field for the root cause.
+
+### Duration and Performance
+
+**`duration_seconds`**
+Total time taken to process the entire batch, measured in seconds. This includes:
+- Listing files in the input bucket
+- Processing each image (OpenAI API calls or fallback)
+- Uploading results to the output bucket
+- Generating the callback payload
+
+Use this metric to estimate processing time for future batches and optimize batch sizes.
+
+---
+
+## watsonx Orchestrate (WXO) Integration Notes
+
+### OpenAPI Tool Configuration
+
+Each endpoint is exposed as an **OpenAPI Tool** in watsonX Orchestrate. The tool definitions are provided in the `tools Orchestrate/` directory:
+
+- `Async_Image_Processing_B64.yaml` - Single image with Base64 output
+- `Async_Image_Processing_COS.yaml` - Single image with COS URL output
+- `Async_Image_Batch_Process_COS.yaml` - Batch processing
+
+### Callback Requirements
+
+**Header Name**
+The callback URL header name is **case-sensitive** and must be exactly `callbackUrl` (camelCase). Using `callbackurl`, `CallbackUrl`, or any other variation will cause the tool to fail.
+
+```http
+callbackUrl: http://your-orchestrate-instance/callback-endpoint
+```
+
+**Callback Schema**
+WXO expects the callback payload to **strictly match** the OpenAPI callback schema defined in the YAML files. Any deviation (missing fields, wrong types, extra fields) may cause workflow failures.
+
+**Response Time**
+The callback endpoint must respond quickly with **HTTP 200 OK**. WXO has timeout limits for callback responses. If your callback handler needs to perform heavy processing, acknowledge receipt immediately and process asynchronously.
+
+```python
+@app.post("/callback")
+async def handle_callback(data: dict):
+    # Acknowledge immediately
+    asyncio.create_task(process_callback_async(data))
+    return {"ok": True}  # Return 200 OK quickly
+```
+
+### Asynchronous Tool Pattern
+
+All endpoints follow the **async tool pattern**:
+
+1. **Immediate Response (202 Accepted)**
+   Returns `job_id` immediately, allowing the workflow to continue without blocking.
+
+2. **Background Processing**
+   The actual work happens asynchronously in a background task.
+
+3. **Callback Notification**
+   When processing completes, a POST request is sent to the `callbackUrl` with the results.
+
+This pattern is essential for long-running operations and prevents workflow timeouts.
+
+### Local Development with Lima VM
+
+When testing locally on Mac with watsonX Orchestrate ADK installed via Lima VM, use the special hostname:
+
+```yaml
+servers:
+  - url: http://host.lima.internal:8000
+```
+
+This allows the VM to communicate with the FastAPI server running on the Mac host. See the main [README.md](README.md) for detailed setup instructions.
+
+### Best Practices for WXO Integration
+
+✅ **Always define callback schemas** in your OpenAPI spec
+✅ **Use exact header names** (`callbackUrl`, not `callback_url`)
+✅ **Return 202 Accepted** for async operations
+✅ **Keep callback responses fast** (< 5 seconds)
+✅ **Include job_id** in all responses for correlation
+✅ **Test with local callback server** before deploying to WXO
+✅ **Handle retries gracefully** (callbacks may be sent multiple times)
 
 ---
 
