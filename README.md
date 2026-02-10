@@ -98,6 +98,19 @@ curl http://localhost:8000/health
 
 ## 🧪 Quick Test
 
+### Prerequisites for Batch Processing
+
+Before testing batch operations, ensure:
+
+✅ **Input bucket exists** and contains test images (JPEG, PNG)
+✅ **Output bucket exists** (can be the same as input)
+✅ **HMAC credentials have permissions**: `list`, `get`, `put`
+✅ **Configuration is valid**:
+```bash
+curl http://localhost:8000/cos/config
+# Verify: endpoint, input_bucket, output_bucket match your setup
+```
+
 ### 1. Start a Callback Server
 
 In a new terminal:
