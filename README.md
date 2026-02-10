@@ -21,12 +21,15 @@
 
 Asynchronous image processing tools for **IBM watsonx Orchestrate (WXO)** with AI-powered transformations via OpenAI and persistent storage in IBM Cloud Object Storage.
 
+> **💡 Design Philosophy:**
+> This project is **production-ready by design** (async patterns, error handling, observability), but intentionally simplified (in-process background tasks) for **demo and enablement purposes**. See [ARCHITECTURE.md](ARCHITECTURE.md) for production scaling options.
+
 ### Key Features
 
-✅ **Single image processing** with AI (OpenAI image editing)  
-✅ **Batch image processing** from IBM Cloud Object Storage  
-✅ **Asynchronous execution** with callback mechanism  
-✅ **Fallback local processing** when OpenAI is unavailable  
+✅ **Single image processing** with AI (OpenAI image editing)
+✅ **Batch image processing** from IBM Cloud Object Storage
+✅ **Asynchronous execution** with callback mechanism
+✅ **Fallback local processing** when OpenAI is unavailable
 ✅ **Enterprise-ready** for demos, prototyping, and production workflows
 
 ---
