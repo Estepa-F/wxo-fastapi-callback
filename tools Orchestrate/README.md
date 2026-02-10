@@ -2,6 +2,9 @@
 
 Mode d'emploi pour importer et utiliser les outils d'image processing dans IBM watsonX Orchestrate.
 
+> **📚 Related Documentation:**
+> Server API reference: [API.md](../API.md) · Setup: [README.md](../README.md) · Configuration: [CONFIGURATION.md](../CONFIGURATION.md) · Design: [ARCHITECTURE.md](../ARCHITECTURE.md)
+
 ---
 
 ## 📋 Vue d'ensemble
